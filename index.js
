@@ -1,67 +1,75 @@
-import 'dotenv/config';
-import {
+const {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ActionRowBuilder,
-  Events,
   REST,
-  Routes
-} from 'discord.js';
+  Routes,
+  Events
+} = require("discord.js");
 
-// ===== CONFIG =====
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-// ==================
+const config = require("./config");
 
+// =========================
+// CLIENTE
+// =========================
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// Slash command
+// =========================
+// SLASH COMMANDS
+// =========================
 const commands = [
   {
-    name: 'setup',
-    description: 'Enviar painel de compra'
+    name: "setup",
+    description: "Enviar painel de compra"
   }
 ];
 
-// Registrar slash
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// Registrar comandos automaticamente
+const rest = new REST({ version: "10" }).setToken(config.token);
+
 (async () => {
   try {
+    console.log("⏳ Registrando comandos...");
     await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
+      Routes.applicationCommands(config.clientId),
       { body: commands }
     );
-    console.log('✅ Comandos registrados');
-  } catch (err) {
-    console.error(err);
+    console.log("✅ Comandos registrados");
+  } catch (error) {
+    console.error("❌ Erro ao registrar comandos:", error);
   }
 })();
 
+// =========================
+// BOT ONLINE
+// =========================
 client.once(Events.ClientReady, () => {
   console.log(`🤖 Bot online como ${client.user.tag}`);
 });
 
-// Interações
+// =========================
+// INTERAÇÕES
+// =========================
 client.on(Events.InteractionCreate, async interaction => {
 
   // Slash command
   if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'setup') {
+    if (interaction.commandName === "setup") {
 
       const embed = new EmbedBuilder()
-        .setTitle('🛒 Loja Oficial')
-        .setDescription('Clique no botão abaixo para comprar')
+        .setTitle("🛒 Loja Oficial")
+        .setDescription("Clique no botão abaixo para iniciar a compra.")
         .setColor(0x00ff99)
-        .setFooter({ text: 'Sistema automático' });
+        .setFooter({ text: "Sistema automático" });
 
       const button = new ButtonBuilder()
-        .setCustomId('comprar')
-        .setLabel('Comprar')
+        .setCustomId("comprar")
+        .setLabel("Comprar")
         .setStyle(ButtonStyle.Success);
 
       const row = new ActionRowBuilder().addComponents(button);
@@ -75,13 +83,16 @@ client.on(Events.InteractionCreate, async interaction => {
 
   // Botão
   if (interaction.isButton()) {
-    if (interaction.customId === 'comprar') {
+    if (interaction.customId === "comprar") {
       await interaction.reply({
-        content: '✅ Compra iniciada! (ticket/pagamento entra aqui)',
+        content: "✅ Compra iniciada! (ticket e pagamento entram aqui)",
         ephemeral: true
       });
     }
   }
 });
 
-client.login(TOKEN);
+// =========================
+// LOGIN
+// =========================
+client.login(config.token);
