@@ -1,11 +1,87 @@
-import { Client, GatewayIntentBits } from "discord.js";
+import 'dotenv/config';
+import {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder,
+  Events,
+  REST,
+  Routes
+} from 'discord.js';
+
+// ===== CONFIG =====
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+// ==================
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-client.once("ready", () => {
+// Slash command
+const commands = [
+  {
+    name: 'setup',
+    description: 'Enviar painel de compra'
+  }
+];
+
+// Registrar slash
+const rest = new REST({ version: '10' }).setToken(TOKEN);
+(async () => {
+  try {
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commands }
+    );
+    console.log('✅ Comandos registrados');
+  } catch (err) {
+    console.error(err);
+  }
+})();
+
+client.once(Events.ClientReady, () => {
   console.log(`🤖 Bot online como ${client.user.tag}`);
 });
 
-client.login(process.env.TOKEN);
+// Interações
+client.on(Events.InteractionCreate, async interaction => {
+
+  // Slash command
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'setup') {
+
+      const embed = new EmbedBuilder()
+        .setTitle('🛒 Loja Oficial')
+        .setDescription('Clique no botão abaixo para comprar')
+        .setColor(0x00ff99)
+        .setFooter({ text: 'Sistema automático' });
+
+      const button = new ButtonBuilder()
+        .setCustomId('comprar')
+        .setLabel('Comprar')
+        .setStyle(ButtonStyle.Success);
+
+      const row = new ActionRowBuilder().addComponents(button);
+
+      await interaction.reply({
+        embeds: [embed],
+        components: [row]
+      });
+    }
+  }
+
+  // Botão
+  if (interaction.isButton()) {
+    if (interaction.customId === 'comprar') {
+      await interaction.reply({
+        content: '✅ Compra iniciada! (ticket/pagamento entra aqui)',
+        ephemeral: true
+      });
+    }
+  }
+});
+
+client.login(TOKEN);
