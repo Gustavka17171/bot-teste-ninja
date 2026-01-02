@@ -1,2 +1,0 @@
-# bot-teste-ninja
-Teste
