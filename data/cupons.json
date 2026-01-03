@@ -1,4 +1,7 @@
 [
-  { "codigo": "DESCONTO10", "tipo": "porcentagem", "valor": 10 }
+  {
+    "codigo": "DESCONTO10",
+    "tipo": "porcentagem",
+    "valor": 10
+  }
 ]
-
