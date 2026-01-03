@@ -34,20 +34,22 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
 client.once('ready', async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 
-  await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: commands }
-  );
-
-  console.log('✅ Slash commands registrados');
+  try {
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log('✅ Slash commands registrados');
+  } catch (err) {
+    console.error('Erro ao registrar comandos:', err);
+  }
 });
 
 // ================= INTERACTIONS =================
 client.on('interactionCreate', async interaction => {
 
-  // /STATUS
+  // ===== /STATUS =====
   if (interaction.isChatInputCommand() && interaction.commandName === 'status') {
-
     const embed = new EmbedBuilder()
       .setTitle('Los Angeles Crimes Online')
       .setDescription('Servidor online')
@@ -57,7 +59,7 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // /PAINEL → MODAL
+  // ===== /PAINEL → ABRIR MODAL (SEM NADA ANTES) =====
   if (interaction.isChatInputCommand() && interaction.commandName === 'painel') {
 
     const modal = new ModalBuilder()
@@ -88,23 +90,35 @@ client.on('interactionCreate', async interaction => {
       new ActionRowBuilder().addComponents(rodape)
     );
 
+    // ⚠️ NADA antes disso
     return interaction.showModal(modal);
   }
 
-  // MODAL SUBMIT
+  // ===== MODAL SUBMIT =====
   if (interaction.isModalSubmit() && interaction.customId === 'painelModal') {
+    try {
+      const titulo = interaction.fields.getTextInputValue('titulo');
+      const descricao = interaction.fields.getTextInputValue('descricao');
+      const rodape = interaction.fields.getTextInputValue('rodape') || ' ';
 
-    const titulo = interaction.fields.getTextInputValue('titulo');
-    const descricao = interaction.fields.getTextInputValue('descricao');
-    const rodape = interaction.fields.getTextInputValue('rodape') || ' ';
+      const embed = new EmbedBuilder()
+        .setTitle(titulo)
+        .setDescription(descricao)
+        .setFooter({ text: rodape })
+        .setTimestamp();
 
-    const embed = new EmbedBuilder()
-      .setTitle(titulo)
-      .setDescription(descricao)
-      .setFooter({ text: rodape })
-      .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
 
-    return interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error('Erro no modal:', err);
+
+      if (!interaction.replied) {
+        return interaction.reply({
+          content: '❌ Erro ao criar o painel.',
+          ephemeral: true
+        });
+      }
+    }
   }
 });
 
