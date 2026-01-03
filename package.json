@@ -1,8 +1,7 @@
 {
-  "name": "lac-status-bot",
+  "name": "bot-fila-1x1",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
