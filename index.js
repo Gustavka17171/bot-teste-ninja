@@ -1,26 +1,35 @@
 require("dotenv").config();
-const { Client, Collection, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const fs = require("fs");
 
+const PREFIX = "!";
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-client.commands = new Collection();
+const produtosPath = "./data/produtos.json";
+const cuponsPath = "./data/cupons.json";
+const carrinhosPath = "./data/carrinhos.json";
 
-for (const file of fs.readdirSync("./commands")) {
-  const cmd = require(`./commands/${file}`);
-  client.commands.set(cmd.data.name, cmd);
-}
-
-client.on("ready", () => {
-  console.log(`🤖 Online: ${client.user.tag}`);
+client.once("ready", () => {
+  console.log(`🤖 Bot ligado como ${client.user.tag}`);
 });
 
-client.on("interactionCreate", async i => {
-  if (!i.isChatInputCommand()) return;
-  const cmd = client.commands.get(i.commandName);
-  if (cmd) cmd.execute(i);
-});
+client.on("messageCreate", (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith(PREFIX)) return;
 
-client.login(process.env.TOKEN);
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const cmd = args.shift().toLowerCase();
+
+  const produtos = JSON.parse(fs.readFileSync(produtosPath));
+  const cupons = JSON.parse(fs.readFileSync(cuponsPath));
+  const carrinhos = JSON.parse(fs.readFileSync(carrinhosPath));
+
+  // !loja
+  if (cmd === "loja") {
+    let txt = "🛒 **LOJA**
