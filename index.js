@@ -8,21 +8,19 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commandFiles = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  client.commands.set(command.data.name, command);
+for (const file of fs.readdirSync("./commands")) {
+  const cmd = require(`./commands/${file}`);
+  client.commands.set(cmd.data.name, cmd);
 }
 
-client.once("ready", () => {
-  console.log(`🤖 Bot ligado como ${client.user.tag}`);
+client.on("ready", () => {
+  console.log(`🤖 Online: ${client.user.tag}`);
 });
 
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-  await command.execute(interaction);
+client.on("interactionCreate", async i => {
+  if (!i.isChatInputCommand()) return;
+  const cmd = client.commands.get(i.commandName);
+  if (cmd) cmd.execute(i);
 });
 
 client.login(process.env.TOKEN);
