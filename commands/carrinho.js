@@ -1,25 +1,21 @@
-const { SlashCommandBuilder } = require("discord.js");
 const fs = require("fs");
-const carrinhos = require("../data/carrinhos.json");
-const produtos = require("../data/produtos.json");
+const carrinhosPath = "./data/carrinhos.json";
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("carrinho")
-    .setDescription("Adicionar produto")
-    .addIntegerOption(o =>
-      o.setName("id").setDescription("ID do produto").setRequired(true)
-    ),
-  async execute(i) {
-    const id = i.options.getInteger("id");
-    const p = produtos.find(x => x.id === id);
-    if (!p) return i.reply("❌ Produto não existe.");
+if (comando === "carrinho") {
+  const id = parseInt(args[0]);
+  if (!id) return message.reply("❌ Use: `!carrinho ID`");
 
-    carrinhos[i.user.id] ??= [];
-    carrinhos[i.user.id].push(p);
+  const carrinhos = JSON.parse(fs.readFileSync(carrinhosPath));
+  const produto = produtos.find(p => p.id === id);
 
-    fs.writeFileSync("./data/carrinhos.json", JSON.stringify(carrinhos, null, 2));
-    i.reply(`✅ ${p.nome} adicionado ao carrinho`);
+  if (!produto) return message.reply("❌ Produto não encontrado");
+
+  if (!carrinhos[message.author.id]) {
+    carrinhos[message.author.id] = [];
   }
-};
 
+  carrinhos[message.author.id].push(produto);
+
+  fs.writeFileSync(carrinhosPath, JSON.stringify(carrinhos, null, 2));
+  message.reply(`✅ **${produto.nome}** adicionado ao carrinho`);
+}
