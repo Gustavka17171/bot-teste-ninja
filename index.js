@@ -40,7 +40,7 @@ let config = {
 // 🧠 FILA
 let fila = [];
 let painelMsg;
-const CANAL_FILA = "COLE_AQUI_ID_DO_CANAL";
+const CANAL_FILA = "1456475458450231510";
 
 // 🔹 EMBED FILA
 function embedFila() {
