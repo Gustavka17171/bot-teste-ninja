@@ -15,21 +15,19 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// ====== FUNÇÕES ======
 const load = (file) =>
   fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {};
 
 const save = (file, data) =>
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 
-// ====== START ======
 client.once("ready", async () => {
   console.log(`🤖 Online como ${client.user.tag}`);
 
   const commands = [
     new SlashCommandBuilder()
       .setName("ativar")
-      .setDescription("Ativar bot com key")
+      .setDescription("Ativar com key")
       .addStringOption(o =>
         o.setName("key").setDescription("Sua key").setRequired(true)
       ),
@@ -40,114 +38,115 @@ client.once("ready", async () => {
 
     new SlashCommandBuilder()
       .setName("players")
-      .setDescription("Definir players online")
+      .setDescription("Definir players")
       .addIntegerOption(o =>
-        o.setName("quantidade")
-          .setDescription("Número de players")
-          .setRequired(true)
+        o.setName("quantidade").setRequired(true)
       ),
 
     new SlashCommandBuilder()
       .setName("status")
-      .setDescription("Mostrar status do servidor")
+      .setDescription("Mostrar status")
   ];
 
   await client.application.commands.set(commands);
 });
 
-// ====== INTERACTIONS ======
 client.on("interactionCreate", async (i) => {
-  const keys = load("keys.json");
-  const painel = load("painel.json");
+  try {
+    const keys = load("keys.json");
+    const painel = load("painel.json");
 
-  // ===== ATIVAR =====
-  if (i.commandName === "ativar") {
-    const key = i.options.getString("key");
+    // ===== ATIVAR =====
+    if (i.commandName === "ativar") {
+      const key = i.options.getString("key");
+      if (!keys[key])
+        return i.reply({ content: "❌ Key inválida.", ephemeral: true });
 
-    if (!keys[key])
-      return i.reply({ content: "❌ Key inválida.", ephemeral: true });
+      painel[i.guild.id] ??= {};
+      painel[i.guild.id].ativo = true;
+      save("painel.json", painel);
 
-    painel[i.guild.id] = painel[i.guild.id] || {};
-    painel[i.guild.id].ativo = true;
-    save("painel.json", painel);
+      return i.reply("✅ Bot ativado!");
+    }
 
-    return i.reply("✅ Bot ativado com sucesso!");
-  }
+    if (!painel[i.guild.id]?.ativo)
+      return i.reply({ content: "❌ Bot não ativado.", ephemeral: true });
 
-  if (!painel[i.guild.id]?.ativo)
-    return i.reply({ content: "❌ Bot não ativado.", ephemeral: true });
+    // ===== PAINEL =====
+    if (i.commandName === "painel") {
+      const modal = new ModalBuilder()
+        .setCustomId("editar_painel")
+        .setTitle("Editar Painel");
 
-  // ===== PAINEL =====
-  if (i.commandName === "painel") {
-    const modal = new ModalBuilder()
-      .setCustomId("editar_painel")
-      .setTitle("Editar Painel");
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("titulo")
+            .setLabel("Título")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("descricao")
+            .setLabel("Descrição")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("rodape")
+            .setLabel("Rodapé")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+        )
+      );
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("titulo")
-          .setLabel("Título")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("descricao")
-          .setLabel("Descrição")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("rodape")
-          .setLabel("Rodapé")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-      )
-    );
+      return i.showModal(modal);
+    }
 
-    return i.showModal(modal);
-  }
+    // ===== MODAL =====
+    if (i.type === InteractionType.ModalSubmit && i.customId === "editar_painel") {
+      painel[i.guild.id] ??= {};
 
-  // ===== MODAL =====
-  if (i.type === InteractionType.ModalSubmit && i.customId === "editar_painel") {
-    painel[i.guild.id] = {
-      ...painel[i.guild.id],
-      titulo: i.fields.getTextInputValue("titulo"),
-      descricao: i.fields.getTextInputValue("descricao"),
-      rodape: i.fields.getTextInputValue("rodape")
-    };
+      painel[i.guild.id].titulo = i.fields.getTextInputValue("titulo");
+      painel[i.guild.id].descricao = i.fields.getTextInputValue("descricao");
+      painel[i.guild.id].rodape = i.fields.getTextInputValue("rodape");
 
-    save("painel.json", painel);
+      save("painel.json", painel);
 
-    return i.reply({ content: "✅ Painel salvo!", ephemeral: true });
-  }
+      return i.reply({ content: "✅ Painel salvo!", ephemeral: true });
+    }
 
-  // ===== PLAYERS =====
-  if (i.commandName === "players") {
-    painel[i.guild.id].players =
-      i.options.getInteger("quantidade");
+    // ===== PLAYERS =====
+    if (i.commandName === "players") {
+      painel[i.guild.id] ??= {};
+      painel[i.guild.id].players = i.options.getInteger("quantidade");
 
-    save("painel.json", painel);
+      save("painel.json", painel);
+      return i.reply("✅ Players atualizados!");
+    }
 
-    return i.reply("✅ Players atualizados!");
-  }
+    // ===== STATUS =====
+    if (i.commandName === "status") {
+      await i.deferReply();
 
-  // ===== STATUS =====
-  if (i.commandName === "status") {
-    const p = painel[i.guild.id];
+      const p = painel[i.guild.id] || {};
 
-    const embed = new EmbedBuilder()
-      .setTitle(p.titulo || "Status")
-      .setDescription(
-        `${p.descricao || ""}\n\n**Players:** ${p.players || 0} online`
-      )
-      .setFooter({ text: p.rodape || "" });
+      const embed = new EmbedBuilder()
+        .setTitle(p.titulo || "Status do Servidor")
+        .setDescription(
+          `${p.descricao || "Servidor Los Angeles Crimes"}\n\n**Players:** ${p.players ?? 0}`
+        )
+        .setFooter({ text: p.rodape || "" });
 
-    return i.reply({ embeds: [embed] });
+      return i.editReply({ embeds: [embed] });
+    }
+  } catch (err) {
+    console.error(err);
+    if (!i.replied)
+      i.reply({ content: "❌ Erro interno.", ephemeral: true });
   }
 });
 
-// ===== LOGIN =====
 client.login(process.env.TOKEN);
