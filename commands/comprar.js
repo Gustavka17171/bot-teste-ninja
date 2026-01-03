@@ -1,18 +1,16 @@
-const { SlashCommandBuilder } = require("discord.js");
-const carrinhos = require("../data/carrinhos.json");
+if (comando === "comprar") {
+  const carrinhos = JSON.parse(fs.readFileSync(carrinhosPath));
+  const carrinho = carrinhos[message.author.id];
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("comprar")
-    .setDescription("Finalizar compra"),
-  async execute(i) {
-    const c = carrinhos[i.user.id];
-    if (!c || !c.length) return i.reply("🛒 Carrinho vazio.");
-
-    let total = c.reduce((s, p) => s + p.preco, 0);
-    delete carrinhos[i.user.id];
-
-    i.reply(`✅ Compra finalizada!\n💰 Total: R$${total}`);
+  if (!carrinho || carrinho.length === 0) {
+    return message.reply("🛒 Seu carrinho está vazio");
   }
-};
 
+  let total = 0;
+  carrinho.forEach(p => total += p.preco);
+
+  delete carrinhos[message.author.id];
+  fs.writeFileSync(carrinhosPath, JSON.stringify(carrinhos, null, 2));
+
+  message.reply(`💸 Compra finalizada!\nTotal: **R$${total}**`);
+}
