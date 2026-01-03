@@ -6,81 +6,51 @@ const {
   ButtonBuilder,
   ButtonStyle,
   PermissionsBitField,
+  ChannelType,
+  SlashCommandBuilder,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle,
-  SlashCommandBuilder,
-  REST,
-  Routes
+  TextInputStyle
 } = require("discord.js");
+const fs = require("fs");
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const TOKEN = process.env.TOKEN;
-const KEY = process.env.KEY;
+const BOT_KEY = process.env.BOT_KEY;
 
-// 🔐 CONFIG KEY
-if (!KEY) {
-  console.log("❌ Key não definida");
-  process.exit();
+// ================== BANCO SIMPLES ==================
+const dbFile = "./db.json";
+const db = fs.existsSync(dbFile) ? JSON.parse(fs.readFileSync(dbFile)) : {};
+const save = () => fs.writeFileSync(dbFile, JSON.stringify(db, null, 2));
+
+// ================== CONFIG PADRÃO ==================
+function defaultConfig() {
+  return {
+    ativo: false,
+    limite: 2,
+    valor: "R$ 2,00",
+    descricao: "Fila 1x1",
+    rodape: "Boa sorte!",
+    imagem: null,
+    thumbnail: null,
+    fila: [],
+    confirmados: []
+  };
 }
 
-// ⚙️ CONFIG PADRÃO (EDITÁVEL PELO SLASH)
-let config = {
-  limite: 2,
-  valor: "R$ 2,00",
-  descricao: "Fila de competição 1x1",
-  rodape: "Boa sorte!",
-  imagem: null,
-  thumbnail: null
-};
-
-// 🧠 FILA
-let fila = [];
-let painelMsg;
-const CANAL_FILA = "1456475458450231510";
-
-// 🔹 EMBED FILA
-function embedFila() {
-  const embed = new EmbedBuilder()
-    .setTitle("1x1 | Fila")
-    .setDescription(config.descricao)
-    .addFields(
-      { name: "Valor", value: config.valor },
-      {
-        name: "Jogadores",
-        value: fila.length
-          ? fila.map(j => `<@${j.id}> | ${j.modo}`).join("\n")
-          : "Nenhum jogador"
-      }
-    )
-    .setFooter({ text: config.rodape })
-    .setColor("Green");
-
-  if (config.imagem) embed.setImage(config.imagem);
-  if (config.thumbnail) embed.setThumbnail(config.thumbnail);
-
-  return embed;
-}
-
-// 🔹 BOTÕES FILA
-const botoesFila = new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId("normal").setLabel("Gel Normal").setStyle(ButtonStyle.Primary),
-  new ButtonBuilder().setCustomId("infinito").setLabel("Gel Infinito").setStyle(ButtonStyle.Secondary),
-  new ButtonBuilder().setCustomId("sair").setLabel("Sair da fila").setStyle(ButtonStyle.Danger)
-);
-
-// 🚀 READY
+// ================== READY ==================
 client.once("ready", async () => {
-  console.log(`✅ ${client.user.tag} online`);
+  console.log(`✅ Bot online: ${client.user.tag}`);
 
-  const canal = await client.channels.fetch(CANAL_FILA);
-  painelMsg = await canal.send({ embeds: [embedFila()], components: [botoesFila] });
-
-  // SLASH
   const commands = [
+    new SlashCommandBuilder()
+      .setName("ativar")
+      .setDescription("Ativar bot com key")
+      .addStringOption(o =>
+        o.setName("key").setDescription("Key").setRequired(true)
+      ),
+
     new SlashCommandBuilder()
       .setName("configurar")
       .setDescription("Configurar fila")
@@ -89,107 +59,122 @@ client.once("ready", async () => {
       .addStringOption(o => o.setName("descricao").setDescription("Descrição").setRequired(false))
       .addStringOption(o => o.setName("rodape").setDescription("Rodapé").setRequired(false))
       .addStringOption(o => o.setName("imagem").setDescription("URL imagem").setRequired(false))
-      .addStringOption(o => o.setName("thumbnail").setDescription("URL thumbnail").setRequired(false))
+      .addStringOption(o => o.setName("thumbnail").setDescription("URL thumbnail").setRequired(false)),
+
+    new SlashCommandBuilder()
+      .setName("painel")
+      .setDescription("Criar painel da fila")
   ];
 
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+  await client.application.commands.set(commands);
 });
 
-// 🔘 INTERAÇÕES
-client.on("interactionCreate", async i => {
+// ================== INTERAÇÕES ==================
+client.on("interactionCreate", async (i) => {
+  const gid = i.guild.id;
+  db[gid] ??= defaultConfig();
 
-  // SLASH CONFIG
-  if (i.isChatInputCommand()) {
+  // ---------- ATIVAR ----------
+  if (i.isChatInputCommand() && i.commandName === "ativar") {
+    if (i.options.getString("key") !== BOT_KEY)
+      return i.reply({ content: "❌ Key inválida", ephemeral: true });
+
+    db[gid].ativo = true;
+    save();
+    return i.reply("✅ Bot ativado neste servidor");
+  }
+
+  if (!db[gid].ativo)
+    return i.reply({ content: "❌ Bot não ativado", ephemeral: true });
+
+  // ---------- CONFIGURAR ----------
+  if (i.isChatInputCommand() && i.commandName === "configurar") {
     if (!i.memberPermissions.has("Administrator"))
       return i.reply({ content: "❌ Sem permissão", ephemeral: true });
 
-    config.limite = i.options.getInteger("limite");
-    config.valor = i.options.getString("valor");
-    config.descricao = i.options.getString("descricao") ?? config.descricao;
-    config.rodape = i.options.getString("rodape") ?? config.rodape;
-    config.imagem = i.options.getString("imagem");
-    config.thumbnail = i.options.getString("thumbnail");
+    db[gid].limite = i.options.getInteger("limite");
+    db[gid].valor = i.options.getString("valor");
+    db[gid].descricao = i.options.getString("descricao") ?? db[gid].descricao;
+    db[gid].rodape = i.options.getString("rodape") ?? db[gid].rodape;
+    db[gid].imagem = i.options.getString("imagem");
+    db[gid].thumbnail = i.options.getString("thumbnail");
 
-    await painelMsg.edit({ embeds: [embedFila()] });
+    save();
     return i.reply({ content: "✅ Configurado", ephemeral: true });
   }
 
-  if (!i.isButton()) return;
+  // ---------- PAINEL ----------
+  if (i.isChatInputCommand() && i.commandName === "painel") {
+    const embed = new EmbedBuilder()
+      .setTitle("1x1 | Fila")
+      .setDescription(db[gid].descricao)
+      .addFields(
+        { name: "Valor", value: db[gid].valor },
+        { name: "Jogadores", value: "Nenhum" }
+      )
+      .setFooter({ text: db[gid].rodape });
 
-  // SAIR
-  if (i.customId === "sair") {
-    fila = fila.filter(j => j.id !== i.user.id);
-    await painelMsg.edit({ embeds: [embedFila()] });
-    return i.reply({ content: "Saiu da fila", ephemeral: true });
+    if (db[gid].imagem) embed.setImage(db[gid].imagem);
+    if (db[gid].thumbnail) embed.setThumbnail(db[gid].thumbnail);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("entrar").setLabel("Entrar").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("sair").setLabel("Sair").setStyle(ButtonStyle.Danger)
+    );
+
+    return i.reply({ embeds: [embed], components: [row] });
   }
 
-  // ENTRAR
-  if (["normal", "infinito"].includes(i.customId)) {
-    if (fila.find(j => j.id === i.user.id))
-      return i.reply({ content: "Já está na fila", ephemeral: true });
+  // ---------- BOTÕES ----------
+  if (i.isButton()) {
+    const cfg = db[gid];
 
-    fila.push({ id: i.user.id, modo: i.customId === "normal" ? "Gel Normal" : "Gel Infinito" });
-    await painelMsg.edit({ embeds: [embedFila()] });
-    i.reply({ content: "Entrou na fila", ephemeral: true });
+    if (i.customId === "entrar") {
+      if (cfg.fila.includes(i.user.id))
+        return i.reply({ content: "Já está na fila", ephemeral: true });
 
-    if (fila.length === config.limite) {
-      const jogadores = [...fila];
-      fila = [];
-      await painelMsg.edit({ embeds: [embedFila()] });
+      cfg.fila.push(i.user.id);
+      save();
+      return i.reply({ content: "Entrou na fila", ephemeral: true });
+    }
 
-      const canal = await i.guild.channels.create({
-        name: "match-1x1",
-        permissionOverwrites: [
-          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          ...jogadores.map(j => ({
-            id: j.id,
-            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
-          }))
-        ]
-      });
+    if (i.customId === "sair") {
+      cfg.fila = cfg.fila.filter(id => id !== i.user.id);
+      save();
+      return i.reply({ content: "Saiu da fila", ephemeral: true });
+    }
 
-      const adminButtons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("senha").setLabel("Enviar ID/Senha").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("fechar").setLabel("Fechar Canal").setStyle(ButtonStyle.Danger)
+    if (i.customId === "fechar") {
+      if (!i.memberPermissions.has("Administrator")) return;
+      return i.channel.delete();
+    }
+
+    if (i.customId === "enviar_sala") {
+      const modal = new ModalBuilder()
+        .setCustomId("modal_sala")
+        .setTitle("Sala & Senha");
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("dados")
+            .setLabel("ID | SENHA")
+            .setStyle(TextInputStyle.Paragraph)
+        )
       );
 
-      canal.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("Match Criado")
-            .setDescription(jogadores.map(j => `<@${j.id}>`).join("\n"))
-            .setColor("Orange")
-        ],
-        components: [adminButtons]
-      });
+      return i.showModal(modal);
     }
   }
 
-  // ADMIN
-  if (i.customId === "fechar") {
-    if (!i.memberPermissions.has("Administrator")) return;
-    return i.channel.delete();
-  }
-
-  if (i.customId === "senha") {
-    const modal = new ModalBuilder()
-      .setCustomId("modal_senha")
-      .setTitle("ID e Senha");
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("dados").setLabel("ID | SENHA").setStyle(TextInputStyle.Paragraph)
-      )
-    );
-
-    return i.showModal(modal);
-  }
-
-  if (i.isModalSubmit() && i.customId === "modal_senha") {
-    const dados = i.fields.getTextInputValue("dados");
+  // ---------- MODAL ----------
+  if (i.isModalSubmit() && i.customId === "modal_sala") {
     return i.channel.send({
-      embeds: [new EmbedBuilder().setTitle("Sala").setDescription(dados).setColor("Green")]
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("Sala do Match")
+          .setDescription(i.fields.getTextInputValue("dados"))
+      ]
     });
   }
 });
