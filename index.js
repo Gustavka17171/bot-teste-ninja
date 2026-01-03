@@ -37,69 +37,44 @@ client.once('ready', async () => {
 client.on('interactionCreate', async interaction => {
 
   // ABRIR MODAL
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'painel') {
+if (interaction.isModalSubmit() && interaction.customId === 'painelModal') {
+  try {
+    const titulo = interaction.fields.getTextInputValue('titulo').trim();
+    const descricao = interaction.fields.getTextInputValue('descricao').trim();
+    const rodape = interaction.fields.getTextInputValue('rodape')?.trim() || ' ';
+    let cor = interaction.fields.getTextInputValue('cor').trim();
 
-      const modal = new ModalBuilder()
-        .setCustomId('painelModal')
-        .setTitle('Editar Painel');
+    // NORMALIZAR COR
+    if (!cor.startsWith('#')) cor = `#${cor}`;
 
-      const titulo = new TextInputBuilder()
-        .setCustomId('titulo')
-        .setLabel('Título do Embed')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
+    const hexRegex = /^#([0-9A-Fa-f]{6})$/;
 
-      const cor = new TextInputBuilder()
-        .setCustomId('cor')
-        .setLabel('Cor HEX (ex: #00ff00)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const descricao = new TextInputBuilder()
-        .setCustomId('descricao')
-        .setLabel('Descrição')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true);
-
-      const rodape = new TextInputBuilder()
-        .setCustomId('rodape')
-        .setLabel('Rodapé')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(titulo),
-        new ActionRowBuilder().addComponents(cor),
-        new ActionRowBuilder().addComponents(descricao),
-        new ActionRowBuilder().addComponents(rodape)
-      );
-
-      await interaction.showModal(modal);
+    // SE A COR FOR INVÁLIDA → USAR PADRÃO (NÃO QUEBRA)
+    if (!hexRegex.test(cor)) {
+      cor = '#00ff00';
     }
-  }
 
-  // RECEBER MODAL
-  if (interaction.isModalSubmit()) {
-    if (interaction.customId === 'painelModal') {
+    const embed = new EmbedBuilder()
+      .setTitle(titulo || 'Status do Servidor')
+      .setDescription(descricao || ' ')
+      .setColor(cor)
+      .setFooter({ text: rodape })
+      .setTimestamp();
 
-      const titulo = interaction.fields.getTextInputValue('titulo');
-      const cor = interaction.fields.getTextInputValue('cor');
-      const descricao = interaction.fields.getTextInputValue('descricao');
-      const rodape = interaction.fields.getTextInputValue('rodape');
+    return interaction.reply({ embeds: [embed] });
 
-      const embed = new EmbedBuilder()
-        .setTitle(titulo)
-        .setDescription(descricao)
-        .setColor(cor)
-        .setFooter({ text: rodape || ' ' })
-        .setTimestamp();
+  } catch (err) {
+    console.error('ERRO NO MODAL:', err);
 
-      await interaction.reply({
-        embeds: [embed]
+    if (!interaction.replied) {
+      return interaction.reply({
+        content: '❌ Erro ao criar o painel. Verifique os dados.',
+        ephemeral: true
       });
     }
   }
+}
+
 });
 
 client.login(process.env.TOKEN);
