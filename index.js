@@ -1,126 +1,153 @@
-const {
+import {
   Client,
   GatewayIntentBits,
   SlashCommandBuilder,
-  REST,
-  Routes,
-  EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ActionRowBuilder
-} = require('discord.js');
-
-const TOKEN = process.env.TOKEN;
+  ActionRowBuilder,
+  EmbedBuilder,
+  InteractionType
+} from "discord.js";
+import fs from "fs";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// ================= SLASH COMMANDS =================
-const commands = [
-  new SlashCommandBuilder()
-    .setName('status')
-    .setDescription('Mostrar status do servidor'),
+// ====== FUNÇÕES ======
+const load = (file) =>
+  fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {};
 
-  new SlashCommandBuilder()
-    .setName('painel')
-    .setDescription('Editar painel do embed')
-].map(cmd => cmd.toJSON());
+const save = (file, data) =>
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// ====== START ======
+client.once("ready", async () => {
+  console.log(`🤖 Online como ${client.user.tag}`);
 
-// ================= READY =================
-client.once('ready', async () => {
-  console.log(`✅ Bot online como ${client.user.tag}`);
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("ativar")
+      .setDescription("Ativar bot com key")
+      .addStringOption(o =>
+        o.setName("key").setDescription("Sua key").setRequired(true)
+      ),
 
-  try {
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands }
-    );
-    console.log('✅ Slash commands registrados');
-  } catch (err) {
-    console.error('Erro ao registrar comandos:', err);
-  }
+    new SlashCommandBuilder()
+      .setName("painel")
+      .setDescription("Editar painel"),
+
+    new SlashCommandBuilder()
+      .setName("players")
+      .setDescription("Definir players online")
+      .addIntegerOption(o =>
+        o.setName("quantidade")
+          .setDescription("Número de players")
+          .setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
+      .setName("status")
+      .setDescription("Mostrar status do servidor")
+  ];
+
+  await client.application.commands.set(commands);
 });
 
-// ================= INTERACTIONS =================
-client.on('interactionCreate', async interaction => {
+// ====== INTERACTIONS ======
+client.on("interactionCreate", async (i) => {
+  const keys = load("keys.json");
+  const painel = load("painel.json");
 
-  // ===== /STATUS =====
-  if (interaction.isChatInputCommand() && interaction.commandName === 'status') {
-    const embed = new EmbedBuilder()
-      .setTitle('Los Angeles Crimes Online')
-      .setDescription('Servidor online')
-      .setFooter({ text: 'Status automático' })
-      .setTimestamp();
+  // ===== ATIVAR =====
+  if (i.commandName === "ativar") {
+    const key = i.options.getString("key");
 
-    return interaction.reply({ embeds: [embed] });
+    if (!keys[key])
+      return i.reply({ content: "❌ Key inválida.", ephemeral: true });
+
+    painel[i.guild.id] = painel[i.guild.id] || {};
+    painel[i.guild.id].ativo = true;
+    save("painel.json", painel);
+
+    return i.reply("✅ Bot ativado com sucesso!");
   }
 
-  // ===== /PAINEL → ABRIR MODAL (SEM NADA ANTES) =====
-  if (interaction.isChatInputCommand() && interaction.commandName === 'painel') {
+  if (!painel[i.guild.id]?.ativo)
+    return i.reply({ content: "❌ Bot não ativado.", ephemeral: true });
 
+  // ===== PAINEL =====
+  if (i.commandName === "painel") {
     const modal = new ModalBuilder()
-      .setCustomId('painelModal')
-      .setTitle('Editar Painel');
-
-    const titulo = new TextInputBuilder()
-      .setCustomId('titulo')
-      .setLabel('Título')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const descricao = new TextInputBuilder()
-      .setCustomId('descricao')
-      .setLabel('Descrição')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
-
-    const rodape = new TextInputBuilder()
-      .setCustomId('rodape')
-      .setLabel('Rodapé')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false);
+      .setCustomId("editar_painel")
+      .setTitle("Editar Painel");
 
     modal.addComponents(
-      new ActionRowBuilder().addComponents(titulo),
-      new ActionRowBuilder().addComponents(descricao),
-      new ActionRowBuilder().addComponents(rodape)
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("titulo")
+          .setLabel("Título")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("descricao")
+          .setLabel("Descrição")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("rodape")
+          .setLabel("Rodapé")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      )
     );
 
-    // ⚠️ NADA antes disso
-    return interaction.showModal(modal);
+    return i.showModal(modal);
   }
 
-  // ===== MODAL SUBMIT =====
-  if (interaction.isModalSubmit() && interaction.customId === 'painelModal') {
-    try {
-      const titulo = interaction.fields.getTextInputValue('titulo');
-      const descricao = interaction.fields.getTextInputValue('descricao');
-      const rodape = interaction.fields.getTextInputValue('rodape') || ' ';
+  // ===== MODAL =====
+  if (i.type === InteractionType.ModalSubmit && i.customId === "editar_painel") {
+    painel[i.guild.id] = {
+      ...painel[i.guild.id],
+      titulo: i.fields.getTextInputValue("titulo"),
+      descricao: i.fields.getTextInputValue("descricao"),
+      rodape: i.fields.getTextInputValue("rodape")
+    };
 
-      const embed = new EmbedBuilder()
-        .setTitle(titulo)
-        .setDescription(descricao)
-        .setFooter({ text: rodape })
-        .setTimestamp();
+    save("painel.json", painel);
 
-      return interaction.reply({ embeds: [embed] });
+    return i.reply({ content: "✅ Painel salvo!", ephemeral: true });
+  }
 
-    } catch (err) {
-      console.error('Erro no modal:', err);
+  // ===== PLAYERS =====
+  if (i.commandName === "players") {
+    painel[i.guild.id].players =
+      i.options.getInteger("quantidade");
 
-      if (!interaction.replied) {
-        return interaction.reply({
-          content: '❌ Erro ao criar o painel.',
-          ephemeral: true
-        });
-      }
-    }
+    save("painel.json", painel);
+
+    return i.reply("✅ Players atualizados!");
+  }
+
+  // ===== STATUS =====
+  if (i.commandName === "status") {
+    const p = painel[i.guild.id];
+
+    const embed = new EmbedBuilder()
+      .setTitle(p.titulo || "Status")
+      .setDescription(
+        `${p.descricao || ""}\n\n**Players:** ${p.players || 0} online`
+      )
+      .setFooter({ text: p.rodape || "" });
+
+    return i.reply({ embeds: [embed] });
   }
 });
 
-// ================= LOGIN =================
-client.login(TOKEN);
+// ===== LOGIN =====
+client.login(process.env.TOKEN);
